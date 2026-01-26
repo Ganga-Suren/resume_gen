@@ -1,4 +1,4 @@
-# resume.gen (Resume RAG Backend)
+# resume_gen (Resume RAG Backend)
 
 ## Setup
 
