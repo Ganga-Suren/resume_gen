@@ -246,16 +246,16 @@ class PatchOperation(BaseModel):
     action: Literal["replace", "insert"]
     bullet_index: Optional[int] = None
     after_index: Optional[int] = None
-    new_bullet: str = Field(..., min_length=5, max_length=300)
+    new_bullet: str = Field(..., min_length=5, max_length=600)
     skill: Optional[str] = None
     reason: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_action(self):
-        if self.section == "technical_skills" and self.action == "replace":
-            raise ValueError("replace is not supported for technical_skills")
         if self.action == "replace":
             if not self.role_id or self.bullet_index is None:
+                if self.section == "technical_skills":
+                    raise ValueError("replace for technical_skills requires bullet_index")
                 raise ValueError("replace requires role_id and bullet_index")
         if self.action == "insert":
             if self.section == "experience" and not self.role_id:
@@ -269,6 +269,7 @@ class SuggestPatchesRequest(BaseModel):
     jd_text: str = Field(..., min_length=20)
     strict_mode: bool = True
     apply_overrides: bool = True
+    rewrite_overrides_with_claude: bool = True
     truth_mode: Literal["off", "strict", "balanced"] = "off"
 
 
@@ -312,15 +313,34 @@ class OverridesFromBlockedItem(BaseModel):
     skill: str = Field(..., min_length=2)
     level: Literal["hands_on", "worked_with", "exposure"]
     role_id: str
-    proof_bullet: str = Field(..., min_length=5, max_length=300)
+    proof_bullet: Optional[str] = Field(default=None, max_length=300)
 
 
 class OverridesFromBlockedRequest(BaseModel):
     items: List[OverridesFromBlockedItem] = Field(..., min_length=1)
+    jd_text: Optional[str] = None
 
 
 class OverridesFromBlockedResponse(BaseModel):
     resume_id: str
     overrides_path: str
     overrides: OverridesRequest
+
+
+class IncludeSkillsRequest(BaseModel):
+    items: List[OverridesFromBlockedItem] = Field(..., min_length=1)
+    jd_text: str = Field(..., min_length=20)
+    truth_mode: Literal["off", "strict", "balanced"] = "off"
+    strict_mode: bool = True
+    rewrite_overrides_with_claude: bool = True
+    export_docx: bool = False
+
+
+class IncludeSkillsResponse(BaseModel):
+    resume_id: str
+    version: str
+    applied_patches: List[PatchOperation]
+    paths: Dict[str, Optional[str]]
+    state: ResumeState
+    blocked: List[BlockedSuggestion] = Field(default_factory=list)
 

@@ -10,6 +10,7 @@ from app.models.schemas import (
 )
 from app.services.resume_store import load_latest_state
 from app.services.resume_overrides import load_overrides, save_overrides
+from app.services.resume_patches import proof_bullet_template
 
 
 router = APIRouter()
@@ -30,7 +31,10 @@ def overrides_from_blocked(resume_id: str, payload: OverridesFromBlockedRequest)
         if not _role_exists(state, item.role_id):
             raise HTTPException(status_code=422, detail=f"role_id not found: {item.role_id}")
 
-        cleaned = _clean_bullet(item.proof_bullet)
+        raw_bullet = (item.proof_bullet or "").strip()
+        cleaned = _clean_bullet(raw_bullet)
+        if len(cleaned) < 5:
+            cleaned = _clean_bullet(proof_bullet_template(item.skill, payload.jd_text or ""))
         if len(cleaned) < 5:
             raise HTTPException(status_code=422, detail="proof_bullet is too short after sanitization")
 

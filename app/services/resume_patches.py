@@ -252,10 +252,13 @@ def _apply_experience_patch(state: ResumeState, patch: PatchOperation) -> None:
 
 
 def _apply_skill_patch(state: ResumeState, patch: PatchOperation) -> None:
-    if patch.action != "insert":
-        raise ValueError("Only insert is supported for technical_skills")
     skills = state.sections.technical_skills
     bullet = _clean_bullet(patch.new_bullet)
+    if patch.action == "replace":
+        if patch.bullet_index is None or patch.bullet_index >= len(skills) or patch.bullet_index < 0:
+            raise IndexError("bullet_index out of range")
+        skills[patch.bullet_index] = bullet
+        return
     idx = patch.after_index if patch.after_index is not None else len(skills) - 1
     if idx < -1 or idx >= len(skills):
         raise IndexError("after_index out of range")
