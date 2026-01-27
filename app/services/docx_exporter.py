@@ -106,9 +106,61 @@ def _clean_markdown(text: str) -> str:
     return cleaned.strip()
 
 
+
+def _relocate_education_block(doc: Document) -> None:
+    """Ensure the EDUCATION block is at the end of the document."""
+    paragraphs = list(doc.paragraphs)
+    start_idx = None
+    for idx, para in enumerate(paragraphs):
+        para_text = para.text or ""
+        if "{{EDUCATION}}" in para_text:
+            start_idx = idx
+            break
+        if _clean_markdown(para_text).strip().upper() == "EDUCATION":
+            start_idx = idx
+            break
+    if start_idx is None:
+        return
+
+    body = doc._element.body
+    for para in paragraphs[start_idx:]:
+        body.remove(para._p)
+        body.append(para._p)
+
+
+
+def _ensure_blank_before_education(doc: Document) -> None:
+    """Insert a blank paragraph before the EDUCATION heading if needed."""
+    paragraphs = list(doc.paragraphs)
+    target = None
+    for para in paragraphs:
+        para_text = para.text or ""
+        if "{{EDUCATION}}" in para_text:
+            target = para
+            break
+        if _clean_markdown(para_text).strip().upper() == "EDUCATION":
+            target = para
+            break
+    if target is None:
+        return
+    prev = target._p.getprevious()
+    if prev is not None:
+        prev_para = None
+        for p in doc.paragraphs:
+            if p._p is prev:
+                prev_para = p
+                break
+        if prev_para is not None and (prev_para.text or '').strip() == '':
+            return
+    blank = doc.add_paragraph("")
+    target._p.addprevious(blank._p)
+
+
 def export_resume_to_docx(template_path: Path, sections: Dict[str, List[str]], output_path: Path) -> None:
     """Render resume sections into the DOCX template and save it."""
     doc = Document(template_path)
+    _relocate_education_block(doc)
+    _ensure_blank_before_education(doc)
 
     for paragraph in list(doc.paragraphs):
         for key, placeholder in _PLACEHOLDER_MAP.items():
