@@ -14,7 +14,7 @@ from app.services.resume_overrides import load_overrides
 from app.services.docx_exporter import export_docx_from_state
 from app.services.claude_client import generate_with_claude
 from app.services.prompts import BULLET_REWRITE_SYSTEM_PROMPT, build_bullet_rewrite_prompt
-from app.services.outcome_enforcer import ensure_outcome_clause
+from app.services.outcome_enforcer import ensure_outcome_clause, ensure_metric_clause
 
 
 router = APIRouter()
@@ -50,7 +50,10 @@ def edit_bullet(resume_id: str, payload: BulletEditRequest) -> BulletEditRespons
         raise HTTPException(status_code=422, detail="new_bullet is invalid")
 
     jd_text = load_latest_jd_text(settings.generated_resumes_dir, resume_id) or ""
-    role.bullets[payload.bullet_index] = ensure_outcome_clause(cleaned, jd_text)
+    role.bullets[payload.bullet_index] = ensure_metric_clause(
+        ensure_outcome_clause(cleaned, jd_text),
+        jd_text,
+    )
 
     meta = append_resume_version(
         settings.generated_resumes_dir,
@@ -159,7 +162,10 @@ def rewrite_bullet(resume_id: str, payload: BulletRewriteRequest) -> BulletRewri
         cleaned = original_bullet
     else:
         jd_text = (payload.jd_text or load_latest_jd_text(settings.generated_resumes_dir, resume_id) or "")
-        cleaned = ensure_outcome_clause(cleaned, jd_text)
+        cleaned = ensure_metric_clause(
+            ensure_outcome_clause(cleaned, jd_text),
+            jd_text,
+        )
 
     return BulletRewriteResponse(
         resume_id=resume_id,

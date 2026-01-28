@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable
 import re
 
 from app.models.schemas import ResumeState
@@ -27,6 +27,26 @@ _TO_OUTCOME_VERBS = re.compile(
 )
 
 _NUMBER_MARKERS = re.compile(r"\b\d+(\.\d+)?%?\b|\b\d+x\b", re.IGNORECASE)
+
+_METRIC_UNITS = re.compile(
+    r"\b("
+    r"ms|millisecond[s]?|second[s]?|minute[s]?|hour[s]?|day[s]?|week[s]?|month[s]?|"
+    r"gb|tb|mb|kb|"
+    r"qps|tps|rps|rpm|"
+    r"records/day|records per day|rows/day|rows per day|"
+    r"requests/day|requests per day|"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_METRIC_TERMS = re.compile(
+    r"\b("
+    r"p95|p99|sla|slo|mttr|uptime|latency|throughput|"
+    r"error rate|failure rate|success rate|conversion rate|"
+    r"availability|response time|lead time|cycle time"
+    r")\b",
+    re.IGNORECASE,
+)
 
 _GOAL_PATTERNS = [
     (r"\breliab|availability|uptime|resilien", "reliability and uptime"),
@@ -62,6 +82,53 @@ _LEADING_VERBS = {
     "establish",
 }
 
+_METRIC_PATTERNS: list[tuple[str, str]] = [
+    (r"\bpostgres|postgresql|sql|query|index|schema|database|warehouse\b", "db_tuning"),
+    (r"\bairflow|kafka|etl|elt|pipeline|ingestion|batch|stream\b", "ingestion"),
+    (r"\bdashboard|analytics|reporting|bi\b", "reporting"),
+    (r"\blogging|monitoring|alerting|cloudwatch|observability\b", "monitoring"),
+    (r"\bswagger|openapi|documentation|runbook|docs\b", "documentation"),
+    (r"\bapi|microservice|fastapi|service\b", "api"),
+    (r"\bauth|oauth|security|compliance|permission\b", "security"),
+]
+
+_METRIC_TEMPLATES: Dict[str, list[str]] = {
+    "db_tuning": [
+        "reducing query time by an estimated ~20-30%",
+        "improving query performance by ~15-25%",
+        "lowering database latency by ~20%",
+    ],
+    "ingestion": [
+        "cutting error rates by ~15-20%",
+        "improving ingestion reliability by ~15-20%",
+        "increasing throughput by an estimated ~20%",
+    ],
+    "reporting": [
+        "reducing reporting time by ~20%",
+        "improving dashboard refresh speed by ~15-25%",
+        "speeding up analytics delivery by ~20%",
+    ],
+    "monitoring": [
+        "reducing MTTR by ~20-30%",
+        "improving incident response time by ~20%",
+        "increasing system uptime to ~99.5%",
+    ],
+    "documentation": [
+        "reducing onboarding time by ~25%",
+        "improving internal adoption by ~20%",
+        "cutting support handoffs by ~15-20%",
+    ],
+    "api": [
+        "improving integration speed by ~20%",
+        "reducing API onboarding time by ~20%",
+        "increasing internal adoption by ~15%",
+    ],
+    "security": [
+        "reducing access-related incidents by ~10-15%",
+        "improving compliance readiness by ~20%",
+        "decreasing auth-related support tickets by ~15%",
+    ],
+}
 
 _OUTCOME_PATTERNS = {
     "pipeline": [
@@ -122,7 +189,11 @@ def enforce_outcome_clauses(
     """Ensure experience bullets include a conservative outcome/purpose clause."""
     for role in state.sections.experience:
         role.bullets = [
-            _ensure_outcome_clause(bullet, jd_text, structured_jd)
+            _ensure_metric_clause(
+                _ensure_outcome_clause(bullet, jd_text, structured_jd),
+                jd_text,
+                structured_jd,
+            )
             for bullet in role.bullets
         ]
     return state
@@ -135,6 +206,15 @@ def ensure_outcome_clause(
 ) -> str:
     """Return a bullet with a conservative outcome/purpose clause if missing."""
     return _ensure_outcome_clause(bullet, jd_text, structured_jd)
+
+
+def ensure_metric_clause(
+    bullet: str,
+    jd_text: str,
+    structured_jd: Optional[dict] = None,
+) -> str:
+    """Return a bullet with a conservative metric clause if missing."""
+    return _ensure_metric_clause(bullet, jd_text, structured_jd)
 
 
 def _ensure_outcome_clause(bullet: str, jd_text: str, structured_jd: Optional[dict]) -> str:
@@ -165,6 +245,57 @@ def _has_outcome(text: str) -> bool:
         return True
     return False
 
+
+def _has_metrics(text: str) -> bool:
+    if _NUMBER_MARKERS.search(text):
+        return True
+    if _METRIC_UNITS.search(text):
+        return True
+    if _METRIC_TERMS.search(text):
+        return True
+    return False
+
+
+def _ensure_metric_clause(bullet: str, jd_text: str, structured_jd: Optional[dict]) -> str:
+    clean = (bullet or "").strip()
+    if not clean:
+        return bullet
+
+    if _has_metrics(clean):
+        return clean
+
+    if len(clean) > 240:
+        return clean
+
+    category = _select_metric_category(clean, jd_text, structured_jd)
+    if not category:
+        return clean
+
+    clause = _metric_clause_for(category)
+    if not clause:
+        return clean
+
+    clean = clean.rstrip(" .;:")
+    return f"{clean}, {clause}"
+
+
+def _select_metric_category(bullet: str, jd_text: str, structured_jd: Optional[dict]) -> Optional[str]:
+    lower = (bullet or "").lower()
+    for pattern, category in _METRIC_PATTERNS:
+        if re.search(pattern, lower):
+            return category
+    jd_lower = (jd_text or "").lower()
+    for pattern, category in _METRIC_PATTERNS:
+        if re.search(pattern, jd_lower):
+            return category
+    return None
+
+
+def _metric_clause_for(category: str) -> Optional[str]:
+    options = _METRIC_TEMPLATES.get(category, [])
+    if not options:
+        return None
+    return options[0]
 
 def _select_goal(jd_text: str, structured_jd: Optional[dict]) -> tuple[str, str]:
     if structured_jd:

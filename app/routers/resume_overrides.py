@@ -23,7 +23,7 @@ from pathlib import Path
 from app.services.docx_exporter import export_docx_from_state
 from app.services.prompts import BULLET_REWRITE_SYSTEM_PROMPT, build_bullet_rewrite_prompt
 from app.services.claude_client import generate_with_claude
-from app.services.outcome_enforcer import enforce_outcome_clauses, ensure_outcome_clause
+from app.services.outcome_enforcer import enforce_outcome_clauses, ensure_outcome_clause, ensure_metric_clause
 
 
 router = APIRouter()
@@ -558,7 +558,7 @@ def _rewrite_override_bullet(role, skill: str, proof_bullet: str, jd_text: str) 
     if skill and _has_token(cleaned, skill) is False and _has_token(cleaned_proof, skill):
         return cleaned_proof
 
-    return ensure_outcome_clause(cleaned, jd_text)
+    return ensure_metric_clause(ensure_outcome_clause(cleaned, jd_text), jd_text)
 
 
 def _clean_bullet(text: str) -> str:
