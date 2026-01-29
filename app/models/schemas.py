@@ -346,3 +346,5 @@ class IncludeSkillsResponse(BaseModel):
     state: ResumeState
     blocked: List[BlockedSuggestion] = Field(default_factory=list)
 
+    
+
